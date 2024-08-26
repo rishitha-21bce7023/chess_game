@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess-like Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .grid { display: grid; grid-template-columns: repeat(5, 50px); grid-template-rows: repeat(5, 50px); gap: 5px; justify-content: center; margin: 20px auto; }
+        .cell { display: flex; align-items: center; justify-content: center; color: white; border: 1px solid black; width: 50px; height: 50px; background-color: black; }
+        .cell:hover { cursor: pointer; background-color: rgb(83, 92, 222); }
+        .directions, .message, .history, #newGameButton { text-align: center; margin-top: 10px; }
+        .directions button { margin-right: 5px; }
+        .message { color: red; font-weight: bold; margin-bottom: 10px; }
+        .win-message {
+            display: none; /* Hidden by default */
+            font-size: 24px;
+            color: green;
+            font-weight: bold;
+            border: 2px solid green;
+            padding: 10px;
+            margin-top: 10px;
+            position: relative;
+            text-align: center;
+        }
+        .win-message::before {
+            content: '!';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            background-color: green;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-weight: bold;
+            position: absolute;
+            left: -35px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #gameState { display: flex; flex-direction: column; align-items: center; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: rgb(159, 13, 45);">Chess-like Game</h1>
+    <div id="winMessage" class="win-message"></div>
+    <div id="gameState">
+        <div class="grid" id="grid"></div>
+        <div class="directions" id="directions"></div>
+        <div class="message" id="message"></div>
+        <button id="newGameButton" style="display: none;" onclick="startNewGame()">Start New Game</button>
+        <div class="history" id="moveHistory"></div>
+    </div>
+    
+    <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        let currentPlayer = null;
+        let selectedCharacter = null;
+
+        ws.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'init' || data.type === 'update') {
+                updateGrid(data.grid);
+                currentPlayer = data.currentPlayer;
+                updateMoveHistory(data.moveHistory);
+                const winMessageElement = document.getElementById('winMessage');
+                if (data.winner) {
+                    winMessageElement.textContent = `${data.winner} Wins!`;
+                    winMessageElement.style.display = 'block';
+                    document.getElementById('directions').textContent = '';
+                    document.getElementById('newGameButton').style.display = 'block';
+                } else {
+                    winMessageElement.style.display = 'none';
+                }
+            } else if (data.type === 'error') {
+                document.getElementById('message').textContent = data.message;
+                setTimeout(() => document.getElementById('message').textContent = '', 3000);
+            }
+        };
+
+        function updateGrid(grid) {
+            const gridElement = document.getElementById('grid');
+            gridElement.innerHTML = '';
+            grid.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const cellElement = document.createElement('div');
+                    cellElement.classList.add('cell');
+                    cellElement.textContent = cell;
+                    cellElement.addEventListener('click', () => selectCharacter(cell, rowIndex, colIndex));
+                    gridElement.appendChild(cellElement);
+                });
+            });
+        }
+
+        function selectCharacter(character, row, col) {
+            if (!character) {
+                document.getElementById('message').textContent = 'Select a valid character!';
+                return;
+            }
+
+            const player = character.split('-')[0];
+            if (player !== currentPlayer) {
+                document.getElementById('message').textContent = 'It\'s not your turn!';
+                return;
+            }
+
+            selectedCharacter = character;
+            document.getElementById('message').textContent = `Selected ${character}`;
+
+            displayDirections(character);
+        }
+
+        function displayDirections(character) {
+            const directionsElement = document.getElementById('directions');
+            directionsElement.innerHTML = '';
+            const charType = character.split('-')[1];
+
+            let directions;
+            if (charType === 'P1' || charType === 'P2' || charType === 'P3') {
+                directions = ['L', 'R', 'F', 'B'];
+            } else if (charType === 'H1') {
+                directions = ['L', 'R', 'F', 'B'];
+            } else if (charType === 'H2') {
+                directions = ['FL', 'FR', 'BL', 'BR'];
+            }
+
+            if (directions.length === 0) {
+                document.getElementById('message').textContent = 'No valid moves!';
+                return;
+            }
+
+            directions.forEach(direction => {
+                const button = document.createElement('button');
+                button.textContent = direction;
+                button.addEventListener('click', () => makeMove(character, direction));
+                directionsElement.appendChild(button);
+            });
+        }
+
+        function makeMove(character, direction) {
+            if (!selectedCharacter) {
+                document.getElementById('message').textContent = 'No character selected!';
+                return;
+            }
+
+            ws.send(JSON.stringify({ type: 'move', move: `${character}:${direction}` }));
+        }
+
+        function startNewGame() {
+            ws.send(JSON.stringify({ type: 'newGame' }));
+            document.getElementById('newGameButton').style.display = 'none';
+        }
+
+        function updateMoveHistory(moveHistory) {
+            const historyElement = document.getElementById('moveHistory');
+            historyElement.innerHTML = '<h3>Move History</h3>';
+            moveHistory.forEach((move, index) => {
+                const moveElement = document.createElement('div');
+                moveElement.textContent = `${index + 1}. ${move}`;
+                historyElement.appendChild(moveElement);
+            });
+        }
+    </script>
+</body>
+</html>
