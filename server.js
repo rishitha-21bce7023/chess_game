@@ -1,9 +1,11 @@
 const WebSocket = require('ws');
 
 // Initialize the WebSocket server on port 8080
-const wss = new WebSocket.Server({ port: 8081 }, () => {
-    console.log('WebSocket server started on ws://localhost:8080');
+const port = process.env.PORT || 8081; // Use the port provided by the environment or fallback to 8081
+const wss = new WebSocket.Server({ port }, () => {
+    console.log(`WebSocket server started on port ${port}`);
 });
+
 
 let gameState = {
     grid: [
